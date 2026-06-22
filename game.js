@@ -258,10 +258,39 @@ document.getElementById('btn-host').addEventListener('click', () => {
         c.on('close', () => {
             let idx = connections.indexOf(c);
             if(idx > -1) {
+                let playerIndex = idx + 1;
                 connections.splice(idx, 1);
                 numPlayers--;
-                document.getElementById('host-lobby-count').innerText = `Players in lobby: ${numPlayers}/4`;
-                broadcast({ type: 'LOBBY_UPDATE', count: numPlayers });
+                
+                if (gameState !== 'GAMEOVER' && document.getElementById('title-screen').classList.contains('hidden')) {
+                    let wasCurrentPlayer = (currentPlayer === playerIndex);
+                    if (currentPlayer > playerIndex) currentPlayer--;
+                    
+                    players.splice(playerIndex, 1);
+                    
+                    if (currentPlayer >= players.length) currentPlayer = 0;
+                    
+                    if (wasCurrentPlayer) {
+                        gameState = 'PLAYING';
+                        if (players[currentPlayer] && players[currentPlayer].holed) nextTurn();
+                    }
+                    
+                    let allHoled = players.length > 0 && players.every(p => p.holed);
+                    if (allHoled && gameState !== 'HOLED') {
+                        gameState = 'HOLED';
+                        setTimeout(showLevelComplete, 800);
+                    }
+                    
+                    broadcast({ type: 'PLAYER_LEFT', leaveIndex: playerIndex });
+                    updateUI();
+                    
+                    if (document.getElementById('next-hole-btn').disabled) {
+                        checkAllPlayersReady();
+                    }
+                } else {
+                    document.getElementById('host-lobby-count').innerText = `Players in lobby: ${numPlayers}/4`;
+                    broadcast({ type: 'LOBBY_UPDATE', count: numPlayers });
+                }
             }
         });
     });
@@ -308,6 +337,7 @@ document.getElementById('btn-join').addEventListener('click', () => {
         
         conn.on('close', () => {
             alert("Disconnected from Host.");
+            location.reload();
         });
     });
     
@@ -334,6 +364,29 @@ function handleNetworkData(data, sourceConn) {
             readyPlayers++;
             checkAllPlayersReady();
         }
+    } else if (data.type === 'PLAYER_LEFT') {
+        let leaveIndex = data.leaveIndex;
+        let wasCurrentPlayer = (currentPlayer === leaveIndex);
+        if (currentPlayer > leaveIndex) currentPlayer--;
+        
+        players.splice(leaveIndex, 1);
+        numPlayers--;
+        
+        if (currentPlayer >= players.length) currentPlayer = 0;
+        
+        if (wasCurrentPlayer) {
+            gameState = 'PLAYING';
+            if (players[currentPlayer] && players[currentPlayer].holed) nextTurn();
+        }
+        
+        let allHoled = players.length > 0 && players.every(p => p.holed);
+        if (allHoled && gameState !== 'HOLED') {
+            gameState = 'HOLED';
+            setTimeout(showLevelComplete, 800);
+        }
+        
+        if (localPlayerIndex > leaveIndex) localPlayerIndex--;
+        updateUI();
     } else if (data.type === 'MAP_DATA') {
         numPlayers = data.numPlayers;
         if (!isHost) {
@@ -1185,3 +1238,10 @@ function gameLoop() {
     draw();
     requestAnimationFrame(gameLoop);
 }
+
+window.addEventListener('beforeunload', (e) => {
+    if (isMultiplayer && document.getElementById('title-screen').classList.contains('hidden') && gameState !== 'GAMEOVER') {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
