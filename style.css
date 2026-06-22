@@ -96,8 +96,8 @@ canvas {
     text-align: center;
 }
 
-#message-overlay.hidden {
-    display: none;
+.hidden {
+    display: none !important;
 }
 
 #message-title {
@@ -180,9 +180,7 @@ button:active {
     padding: 20px 0;
 }
 
-#title-screen.hidden {
-    display: none;
-}
+
 
 #title-text {
     font-size: 40px;
