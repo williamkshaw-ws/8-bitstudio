@@ -70,10 +70,27 @@ let currentPar = 3;
 
 // Multiplayer Network State
 let peer = null;
-let conn = null;
+let connections = [];
 let isHost = false;
 let isMultiplayer = false;
 let localPlayerIndex = 0;
+
+function broadcast(data, excludeConnection = null) {
+    for (let c of connections) {
+        if (c !== excludeConnection && c.open) {
+            c.send(data);
+        }
+    }
+}
+
+function sendNetworkData(data) {
+    if (!isMultiplayer) return;
+    if (isHost) {
+        broadcast(data);
+    } else {
+        if (connections.length > 0) connections[0].send(data);
+    }
+}
 
 // Audio System
 let audioCtx;
@@ -161,7 +178,7 @@ document.getElementById('btn-host').addEventListener('click', () => {
     isMultiplayer = true;
     isHost = true;
     localPlayerIndex = 0;
-    numPlayers = 2; // Fixed 2-player for network
+    numPlayers = 1;
     
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     let code = '';
@@ -173,9 +190,40 @@ document.getElementById('btn-host').addEventListener('click', () => {
     
     peer = new Peer('MGOLF-' + code);
     peer.on('connection', (c) => {
-        conn = c;
-        setupConnection();
+        if (gameState === 'PLAYING') return; // Cannot join mid-game
+        if (connections.length >= 3) return; // Max 4 players total
+        
+        connections.push(c);
+        numPlayers++;
+        document.getElementById('host-lobby-count').innerText = `Players in lobby: ${numPlayers}/4`;
+        
+        c.on('data', (data) => {
+            handleNetworkData(data, c);
+        });
+        
+        c.on('open', () => {
+            broadcast({ type: 'LOBBY_UPDATE', count: numPlayers });
+        });
+        
+        c.on('close', () => {
+            let idx = connections.indexOf(c);
+            if(idx > -1) {
+                connections.splice(idx, 1);
+                numPlayers--;
+                document.getElementById('host-lobby-count').innerText = `Players in lobby: ${numPlayers}/4`;
+                broadcast({ type: 'LOBBY_UPDATE', count: numPlayers });
+            }
+        });
     });
+});
+
+document.getElementById('btn-start-multiplayer').addEventListener('click', () => {
+    if (connections.length < 1) {
+        alert("Wait for at least 1 friend to join!");
+        return;
+    }
+    document.getElementById('title-screen').classList.add('hidden');
+    startGame();
 });
 
 document.getElementById('btn-join-menu').addEventListener('click', () => {
@@ -190,34 +238,46 @@ document.getElementById('btn-join').addEventListener('click', () => {
     
     isMultiplayer = true;
     isHost = false;
-    localPlayerIndex = 1;
-    numPlayers = 2;
+    localPlayerIndex = 1; // Will be overwritten by MAP_DATA
     
     document.getElementById('btn-join').innerText = "Connecting...";
     
     peer = new Peer();
     peer.on('open', () => {
-        conn = peer.connect('MGOLF-' + code);
+        let conn = peer.connect('MGOLF-' + code);
+        connections.push(conn);
+        
         conn.on('open', () => {
-            setupConnection();
+            document.getElementById('join-input-section').classList.add('hidden');
+            document.getElementById('join-lobby-status').classList.remove('hidden');
+        });
+        
+        conn.on('data', (data) => {
+            handleNetworkData(data, conn);
+        });
+        
+        conn.on('close', () => {
+            alert("Disconnected from Host.");
         });
     });
 });
 
-function setupConnection() {
-    document.getElementById('title-screen').classList.add('hidden');
-    
-    conn.on('data', (data) => {
-        handleNetworkData(data);
-    });
-    
-    if (isHost) {
-        startGame(); // Host generates the level and sends it automatically
+function handleNetworkData(data, sourceConn) {
+    // If we are the Host, forward actions to all OTHER clients so everyone is synced
+    if (isHost && (data.type === 'SHOT' || data.type === 'SYNC')) {
+        broadcast(data, sourceConn);
     }
-}
 
-function handleNetworkData(data) {
-    if (data.type === 'MAP_DATA') {
+    if (data.type === 'LOBBY_UPDATE') {
+        if (!isHost) {
+            document.getElementById('join-lobby-status').innerText = `Connected! Players in lobby: ${data.count}/4\nWaiting for host to start...`;
+        }
+    } else if (data.type === 'MAP_DATA') {
+        numPlayers = data.numPlayers;
+        if (!isHost) {
+            localPlayerIndex = data.yourPlayerIndex;
+            document.getElementById('title-screen').classList.add('hidden');
+        }
         globalGrid = data.grid;
         walls = [];
         greenZones = [];
@@ -556,17 +616,23 @@ function generateLevel() {
     }
     
     if (isMultiplayer && isHost) {
-        conn.send({
-            type: 'MAP_DATA',
-            grid: grid,
-            startC: bestLevel.startC,
-            startR: bestLevel.startR,
-            hx: hole.x,
-            hy: hole.y,
-            holePars: holePars,
-            currentPar: currentPar,
-            currentHole: currentHole
-        });
+        let idx = 1;
+        for (let c of connections) {
+            c.send({
+                type: 'MAP_DATA',
+                grid: grid,
+                startC: bestLevel.startC,
+                startR: bestLevel.startR,
+                hx: hole.x,
+                hy: hole.y,
+                holePars: holePars,
+                currentPar: currentPar,
+                currentHole: currentHole,
+                numPlayers: numPlayers,
+                yourPlayerIndex: idx
+            });
+            idx++;
+        }
     }
 }
 
@@ -657,7 +723,7 @@ window.addEventListener('mouseup', (e) => {
         p.strokes++;
         
         if (isMultiplayer) {
-            conn.send({
+            sendNetworkData({
                 type: 'SHOT',
                 player: currentPlayer,
                 vx: p.ball.vx,
@@ -735,7 +801,7 @@ window.addEventListener('touchend', (e) => {
         p.strokes++;
         
         if (isMultiplayer) {
-            conn.send({
+            sendNetworkData({
                 type: 'SHOT',
                 player: currentPlayer,
                 vx: p.ball.vx,
@@ -783,7 +849,7 @@ function updatePhysics() {
         ball.vy = 0;
         
         if (isMultiplayer && currentPlayer === localPlayerIndex) {
-            conn.send({
+            sendNetworkData({
                 type: 'SYNC',
                 player: currentPlayer,
                 x: ball.x,
@@ -808,7 +874,7 @@ function updatePhysics() {
             playSoundHole();
             
             if (isMultiplayer && currentPlayer === localPlayerIndex) {
-                conn.send({
+                sendNetworkData({
                     type: 'SYNC',
                     player: currentPlayer,
                     x: ball.x,

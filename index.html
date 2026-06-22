@@ -37,11 +37,15 @@
                     </div>
                     <div id="host-ui" class="hidden" style="margin-top: 10px;">
                         <p style="color: #FFD700; font-size: 14px;">Room Code: <span id="room-code-display">...</span></p>
-                        <p style="font-size: 10px;">Waiting for friend...</p>
+                        <p id="host-lobby-count" style="font-size: 10px;">Players in lobby: 1/4</p>
+                        <button id="btn-start-multiplayer" style="margin-top: 10px; padding: 10px; font-size: 10px;">Start Game</button>
                     </div>
                     <div id="join-ui" class="hidden" style="margin-top: 10px;">
-                        <input type="text" id="join-code-input" placeholder="CODE" maxlength="4" style="text-transform:uppercase; font-family:'Press Start 2P', monospace; width: 100px; padding: 5px; text-align: center; display: block; margin: 0 auto 10px auto;">
-                        <button id="btn-join" style="padding: 8px 10px; font-size: 12px;">Connect</button>
+                        <div id="join-input-section">
+                            <input type="text" id="join-code-input" placeholder="CODE" maxlength="4" style="text-transform:uppercase; font-family:'Press Start 2P', monospace; width: 100px; padding: 5px; text-align: center; display: block; margin: 0 auto 10px auto;">
+                            <button id="btn-join" style="padding: 8px 10px; font-size: 12px;">Connect</button>
+                        </div>
+                        <p id="join-lobby-status" class="hidden" style="font-size: 10px; margin-top: 10px;">Waiting for host to start...</p>
                     </div>
                 </div>
             </div>
