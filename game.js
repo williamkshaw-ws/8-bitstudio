@@ -66,6 +66,7 @@ let players = [];
 let currentPlayer = 0;
 let numPlayers = 1;
 let holePars = Array(18).fill(3);
+let courseData = [];
 let currentPar = 3;
 
 // Multiplayer Network State
@@ -359,6 +360,11 @@ function handleNetworkData(data, sourceConn) {
         if (!isHost) {
             document.getElementById('join-lobby-status').innerText = `Connected! Players in lobby: ${data.count}/4\nWaiting for host to start...`;
         }
+    } else if (data.type === 'COURSE_INFO') {
+        if (!isHost) {
+            holePars = data.holePars;
+            if (players.length > 0) updateUI();
+        }
     } else if (data.type === 'READY_NEXT_HOLE') {
         if (isHost) {
             readyPlayers++;
@@ -475,7 +481,7 @@ function handleNetworkData(data, sourceConn) {
 
 function startGame() {
     players = [];
-    holePars = Array(18).fill(3);
+    generateCourse(); // this fills holePars and courseData
     for(let i=0; i<numPlayers; i++) {
         players.push({
             color: PLAYER_COLORS[i],
@@ -488,6 +494,9 @@ function startGame() {
         });
     }
     currentHole = 1;
+    if (isMultiplayer && isHost) {
+        broadcast({ type: 'COURSE_INFO', holePars: holePars });
+    }
     startHole();
     if (!window.gameLoopRunning) {
         window.gameLoopRunning = true;
@@ -498,7 +507,7 @@ function startGame() {
 function startHole() {
     gameState = 'PLAYING';
     currentPlayer = 0;
-    generateLevel();
+    loadLevel(courseData[currentHole - 1]);
     for(let p of players) {
         p.strokes = 0;
         p.holed = false;
@@ -508,7 +517,7 @@ function startHole() {
     updateUI();
 }
 
-function generateLevel() {
+function generateSingleHole() {
     const cols = Math.floor(WIDTH / TILE_SIZE);
     const rows = Math.floor(HEIGHT / TILE_SIZE);
     
@@ -690,24 +699,46 @@ function generateLevel() {
         }
     } // end while(attempts)
     
-    // Apply best level
+    // Return best level data
     let grid = bestLevel.grid;
     let shortestPath = bestLevel.shortestPath;
-    hole.x = bestLevel.hx;
-    hole.y = bestLevel.hy;
-    
-    for(let p of players) {
-        p.ball.x = bestLevel.startC * TILE_SIZE + TILE_SIZE/2;
-        p.ball.y = bestLevel.startR * TILE_SIZE + TILE_SIZE/2;
-        p.ball.vx = 0; p.ball.vy = 0;
-    }
     
     // Calculate Par based on ACTUAL playable distance
-    if (shortestPath < 12) currentPar = 2;
-    else if (shortestPath < 20) currentPar = 3;
-    else if (shortestPath < 28) currentPar = 4;
-    else currentPar = 5;
-    holePars[currentHole - 1] = currentPar;
+    let par = 5;
+    if (shortestPath < 12) par = 2;
+    else if (shortestPath < 20) par = 3;
+    else if (shortestPath < 28) par = 4;
+    
+    return {
+        grid: grid,
+        startC: bestLevel.startC,
+        startR: bestLevel.startR,
+        hx: bestLevel.hx,
+        hy: bestLevel.hy,
+        par: par
+    };
+}
+
+function generateCourse() {
+    courseData = [];
+    for(let i=0; i<18; i++) {
+        let holeData = generateSingleHole();
+        courseData.push(holeData);
+        holePars[i] = holeData.par;
+    }
+}
+
+function loadLevel(holeData) {
+    let grid = holeData.grid;
+    hole.x = holeData.hx;
+    hole.y = holeData.hy;
+    currentPar = holeData.par;
+    
+    for(let p of players) {
+        p.ball.x = holeData.startC * TILE_SIZE + TILE_SIZE/2;
+        p.ball.y = holeData.startR * TILE_SIZE + TILE_SIZE/2;
+        p.ball.vx = 0; p.ball.vy = 0;
+    }
     
     buildCourseGeometry(grid);
     
@@ -717,8 +748,8 @@ function generateLevel() {
             c.send({
                 type: 'MAP_DATA',
                 grid: grid,
-                startC: bestLevel.startC,
-                startR: bestLevel.startR,
+                startC: holeData.startC,
+                startR: holeData.startR,
                 hx: hole.x,
                 hy: hole.y,
                 holePars: holePars,
