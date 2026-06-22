@@ -394,6 +394,8 @@ function handleNetworkData(data, sourceConn) {
             requestAnimationFrame(gameLoop);
         }
     } else if (data.type === 'SHOT') {
+        currentPlayer = data.player; // FORCE RESYNC THE TURN
+        
         let p = players[data.player];
         p.ball.vx = data.vx;
         p.ball.vy = data.vy;
@@ -411,6 +413,8 @@ function handleNetworkData(data, sourceConn) {
             p.holed = true;
             playSoundHole();
             nextTurn(); 
+        } else if (!data.holed && p.holed) {
+            p.holed = false;
         }
         updateUI();
     }
