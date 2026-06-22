@@ -19,7 +19,7 @@
             <h1 id="title-text" style="margin-bottom: 20px;">8-BIT<br>MINI GOLF</h1>
             
             <div style="display: flex; gap: 40px; justify-content: center; flex-wrap: wrap;">
-                <div>
+                <div style="display: flex; flex-direction: column; align-items: center;">
                     <p style="margin-bottom: 15px;">Local Play:</p>
                     <div class="player-buttons">
                         <button class="player-btn" data-players="1">1 Player</button>
@@ -29,17 +29,17 @@
                     </div>
                 </div>
                 
-                <div>
+                <div style="display: flex; flex-direction: column; align-items: center;">
                     <p style="margin-bottom: 15px;">Online Multiplayer:</p>
-                    <div class="player-buttons">
+                    <div class="player-buttons" id="online-buttons">
                         <button id="btn-host">Host Game</button>
                         <button id="btn-join-menu">Join Game</button>
                     </div>
-                    <div id="host-ui" class="hidden" style="margin-top: 20px;">
+                    <div id="host-ui" class="hidden" style="margin-top: 10px;">
                         <p style="color: #FFD700; font-size: 14px;">Room Code: <span id="room-code-display">...</span></p>
                         <p style="font-size: 10px;">Waiting for friend...</p>
                     </div>
-                    <div id="join-ui" class="hidden" style="margin-top: 20px;">
+                    <div id="join-ui" class="hidden" style="margin-top: 10px;">
                         <input type="text" id="join-code-input" placeholder="CODE" maxlength="4" style="text-transform:uppercase; font-family:'Press Start 2P', monospace; width: 100px; padding: 5px; text-align: center; display: block; margin: 0 auto 10px auto;">
                         <button id="btn-join" style="padding: 8px 10px; font-size: 12px;">Connect</button>
                     </div>

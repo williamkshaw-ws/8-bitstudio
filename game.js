@@ -168,6 +168,7 @@ document.getElementById('btn-host').addEventListener('click', () => {
     for(let i=0; i<4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
     
     document.getElementById('room-code-display').innerText = code;
+    document.getElementById('online-buttons').classList.add('hidden');
     document.getElementById('host-ui').classList.remove('hidden');
     
     peer = new Peer('MGOLF-' + code);
@@ -178,6 +179,7 @@ document.getElementById('btn-host').addEventListener('click', () => {
 });
 
 document.getElementById('btn-join-menu').addEventListener('click', () => {
+    document.getElementById('online-buttons').classList.add('hidden');
     document.getElementById('join-ui').classList.remove('hidden');
 });
 
