@@ -56,6 +56,30 @@ canvas {
         padding: 10px 5px;
         font-size: 8px;
     }
+    
+    #title-text {
+        font-size: 24px !important;
+        margin-bottom: 15px !important;
+    }
+    
+    #title-screen p {
+        font-size: 10px;
+        margin-bottom: 5px !important;
+    }
+    
+    .player-buttons {
+        gap: 8px !important;
+    }
+    
+    .player-btn, #btn-host, #btn-join-menu {
+        width: 140px !important;
+        padding: 8px 10px;
+        font-size: 10px;
+    }
+    
+    #title-screen > div > div {
+        gap: 15px !important;
+    }
 }
 
 #message-overlay {
@@ -151,6 +175,9 @@ button:active {
     align-items: center;
     text-align: center;
     z-index: 10;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 20px 0;
 }
 
 #title-screen.hidden {
@@ -175,7 +202,7 @@ button:active {
     gap: 15px;
 }
 
-.player-btn {
+.player-btn, #btn-host, #btn-join-menu {
     width: 200px;
 }
 
