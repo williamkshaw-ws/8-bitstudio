@@ -60,6 +60,16 @@ canvas {
         gap: 5px;
     }
     
+    #scorecard {
+        max-width: 90vw;
+        overflow-x: auto;
+    }
+    
+    .unified-scorecard th, .unified-scorecard td {
+        padding: 4px;
+        font-size: 10px;
+    }
+    
     #title-text {
         font-size: 24px !important;
         margin-bottom: 15px !important;

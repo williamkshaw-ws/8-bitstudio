@@ -79,6 +79,11 @@ let readyPlayers = 0;
 function checkAllPlayersReady() {
     if (readyPlayers >= numPlayers) {
         readyPlayers = 0;
+        
+        document.getElementById('message-overlay').classList.add('hidden');
+        document.getElementById('next-hole-btn').innerText = "Next Hole";
+        document.getElementById('next-hole-btn').disabled = false;
+        
         currentHole++;
         startHole();
     }
