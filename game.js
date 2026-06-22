@@ -708,7 +708,7 @@ window.addEventListener('mouseup', (e) => {
     if (!isDragging) return;
     isDragging = false;
     
-    if (gameState !== 'PLAYING') return;
+    if (gameState !== 'AIMING') return;
     if (isMultiplayer && currentPlayer !== localPlayerIndex) return;
     
     let dx = dragStart.x - dragCurrent.x;
@@ -786,7 +786,7 @@ window.addEventListener('touchend', (e) => {
     if (!isDragging) return;
     isDragging = false;
     
-    if (gameState !== 'PLAYING') return;
+    if (gameState !== 'AIMING') return;
     if (isMultiplayer && currentPlayer !== localPlayerIndex) return;
     
     let dx = dragStart.x - dragCurrent.x;
