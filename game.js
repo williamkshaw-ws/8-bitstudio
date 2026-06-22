@@ -60,7 +60,7 @@ const PLAYER_COLORS = [
 // Game State
 let currentHole = 1;
 let totalHoles = 18;
-let gameState = 'PLAYING'; // PLAYING, AIMING, ROLLING, HOLED, GAMEOVER
+let gameState = 'LOBBY'; // LOBBY, PLAYING, AIMING, ROLLING, HOLED, GAMEOVER
 
 let players = [];
 let currentPlayer = 0;
@@ -179,6 +179,7 @@ document.getElementById('btn-host').addEventListener('click', () => {
     isHost = true;
     localPlayerIndex = 0;
     numPlayers = 1;
+    gameState = 'LOBBY';
     
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     let code = '';
