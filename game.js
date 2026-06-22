@@ -68,6 +68,13 @@ let numPlayers = 1;
 let holePars = Array(18).fill(3);
 let currentPar = 3;
 
+// Multiplayer Network State
+let peer = null;
+let conn = null;
+let isHost = false;
+let isMultiplayer = false;
+let localPlayerIndex = 0;
+
 // Audio System
 let audioCtx;
 function initAudio() {
@@ -137,15 +144,148 @@ let isDragging = false;
 let dragStart = { x: 0, y: 0 };
 let dragCurrent = { x: 0, y: 0 };
 
-// Init
+// Init Local
 document.querySelectorAll('.player-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
         initAudio();
+        isMultiplayer = false;
         numPlayers = parseInt(e.target.dataset.players);
         document.getElementById('title-screen').classList.add('hidden');
         startGame();
     });
 });
+
+// Init Network UI
+document.getElementById('btn-host').addEventListener('click', () => {
+    initAudio();
+    isMultiplayer = true;
+    isHost = true;
+    localPlayerIndex = 0;
+    numPlayers = 2; // Fixed 2-player for network
+    
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let code = '';
+    for(let i=0; i<4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+    
+    document.getElementById('room-code-display').innerText = code;
+    document.getElementById('host-ui').classList.remove('hidden');
+    
+    peer = new Peer('MGOLF-' + code);
+    peer.on('connection', (c) => {
+        conn = c;
+        setupConnection();
+    });
+});
+
+document.getElementById('btn-join-menu').addEventListener('click', () => {
+    document.getElementById('join-ui').classList.remove('hidden');
+});
+
+document.getElementById('btn-join').addEventListener('click', () => {
+    initAudio();
+    let code = document.getElementById('join-code-input').value.toUpperCase();
+    if(code.length !== 4) return;
+    
+    isMultiplayer = true;
+    isHost = false;
+    localPlayerIndex = 1;
+    numPlayers = 2;
+    
+    document.getElementById('btn-join').innerText = "Connecting...";
+    
+    peer = new Peer();
+    peer.on('open', () => {
+        conn = peer.connect('MGOLF-' + code);
+        conn.on('open', () => {
+            setupConnection();
+        });
+    });
+});
+
+function setupConnection() {
+    document.getElementById('title-screen').classList.add('hidden');
+    
+    conn.on('data', (data) => {
+        handleNetworkData(data);
+    });
+    
+    if (isHost) {
+        startGame(); // Host generates the level and sends it automatically
+    }
+}
+
+function handleNetworkData(data) {
+    if (data.type === 'MAP_DATA') {
+        globalGrid = data.grid;
+        walls = [];
+        greenZones = [];
+        let cols = globalGrid[0].length;
+        let rows = globalGrid.length;
+        for(let r=0; r<rows; r++) {
+            for(let c=0; c<cols; c++) {
+                if (globalGrid[r][c] === 'wall') {
+                    walls.push({x: c*TILE_SIZE, y: r*TILE_SIZE, w: TILE_SIZE, h: TILE_SIZE});
+                } else {
+                    greenZones.push({x: c*TILE_SIZE, y: r*TILE_SIZE, w: TILE_SIZE, h: TILE_SIZE});
+                }
+            }
+        }
+        hole.x = data.hx;
+        hole.y = data.hy;
+        currentPar = data.currentPar;
+        currentHole = data.currentHole;
+        holePars = data.holePars;
+        
+        if (players.length === 0) {
+            for(let i=0; i<numPlayers; i++) {
+                players.push({
+                    id: i+1,
+                    strokes: 0,
+                    holed: false,
+                    ball: {x: data.startC*TILE_SIZE + TILE_SIZE/2, y: data.startR*TILE_SIZE + TILE_SIZE/2, vx: 0, vy: 0, radius: 5},
+                    lastPosition: {x: data.startC*TILE_SIZE + TILE_SIZE/2, y: data.startR*TILE_SIZE + TILE_SIZE/2}
+                });
+            }
+        } else {
+            for(let p of players) {
+                p.holed = false;
+                p.ball.x = data.startC*TILE_SIZE + TILE_SIZE/2;
+                p.ball.y = data.startR*TILE_SIZE + TILE_SIZE/2;
+                p.ball.vx = 0; p.ball.vy = 0;
+            }
+        }
+        
+        gameState = 'PLAYING';
+        currentPlayer = 0;
+        isDragging = false;
+        
+        updateUI();
+        
+        if (currentHole === 1) {
+            lastTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+    } else if (data.type === 'SHOT') {
+        let p = players[data.player];
+        p.ball.vx = data.vx;
+        p.ball.vy = data.vy;
+        playSoundHit();
+        p.strokes++;
+        updateUI();
+    } else if (data.type === 'SYNC') {
+        let p = players[data.player];
+        p.ball.x = data.x;
+        p.ball.y = data.y;
+        p.strokes = data.strokes;
+        
+        if (data.holed && !p.holed) {
+            p.holed = true;
+            playSoundHole();
+            nextTurn(); 
+        }
+        updateUI();
+    }
+}
 
 function startGame() {
     players = [];
@@ -412,6 +552,20 @@ function generateLevel() {
             }
         }
     }
+    
+    if (isMultiplayer && isHost) {
+        conn.send({
+            type: 'MAP_DATA',
+            grid: grid,
+            startC: bestLevel.startC,
+            startR: bestLevel.startR,
+            hx: hole.x,
+            hy: hole.y,
+            holePars: holePars,
+            currentPar: currentPar,
+            currentHole: currentHole
+        });
+    }
 }
 
 function getScaledCoords(e) {
@@ -436,9 +590,9 @@ function getScaledCoords(e) {
     };
 }
 
-function handleStart(e) {
+window.addEventListener('mousedown', (e) => {
     if (gameState !== 'PLAYING') return;
-    if (e.cancelable) e.preventDefault();
+    if (isMultiplayer && currentPlayer !== localPlayerIndex) return; // Not your turn!
     
     let coords = getScaledCoords(e);
     dragStart.x = coords.x;
@@ -448,11 +602,10 @@ function handleStart(e) {
     
     isDragging = true;
     gameState = 'AIMING';
-}
+});
 
-function handleMove(e) {
+window.addEventListener('mousemove', (e) => {
     if (isDragging) {
-        if (e.cancelable) e.preventDefault();
         let coords = getScaledCoords(e);
         
         let dx = dragStart.x - coords.x;
@@ -470,48 +623,130 @@ function handleMove(e) {
             dragCurrent.y = coords.y;
         }
     }
-}
+});
 
-function handleEnd(e) {
-    if (isDragging && gameState === 'AIMING') {
-        if (e.cancelable) e.preventDefault();
-        isDragging = false;
+window.addEventListener('mouseup', (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+    
+    if (gameState !== 'PLAYING') return;
+    if (isMultiplayer && currentPlayer !== localPlayerIndex) return;
+    
+    let dx = dragStart.x - dragCurrent.x;
+    let dy = dragStart.y - dragCurrent.y;
+    
+    let powerScale = 0.15;
+    let powerX = dx * powerScale;
+    let powerY = dy * powerScale;
+    
+    let powerDist = Math.hypot(powerX, powerY);
+    if (powerDist > MAX_POWER) {
+        powerX = (powerX / powerDist) * MAX_POWER;
+        powerY = (powerY / powerDist) * MAX_POWER;
+    }
+    
+    if (powerDist > 0.5) {
+        playSoundHit();
+        let p = players[currentPlayer];
+        p.lastPosition.x = p.ball.x;
+        p.lastPosition.y = p.ball.y;
+        p.ball.vx = powerX;
+        p.ball.vy = powerY;
+        p.strokes++;
         
-        let dx = dragStart.x - dragCurrent.x;
-        let dy = dragStart.y - dragCurrent.y;
-        
-        let powerScale = 0.15;
-        let powerX = dx * powerScale;
-        let powerY = dy * powerScale;
-        
-        let powerDist = Math.hypot(powerX, powerY);
-        if (powerDist > MAX_POWER) {
-            powerX = (powerX / powerDist) * MAX_POWER;
-            powerY = (powerY / powerDist) * MAX_POWER;
+        if (isMultiplayer) {
+            conn.send({
+                type: 'SHOT',
+                player: currentPlayer,
+                vx: p.ball.vx,
+                vy: p.ball.vy
+            });
         }
         
-        if (powerDist > 0.5) {
-            playSoundHit();
-            let p = players[currentPlayer];
-            p.lastPosition.x = p.ball.x;
-            p.lastPosition.y = p.ball.y;
-            p.ball.vx = powerX;
-            p.ball.vy = powerY;
-            p.strokes++;
-            updateUI();
-            gameState = 'ROLLING';
+        updateUI();
+        gameState = 'ROLLING';
+    } else {
+        gameState = 'PLAYING';
+    }
+});
+
+window.addEventListener('touchstart', (e) => {
+    if (gameState !== 'PLAYING') return;
+    if (isMultiplayer && currentPlayer !== localPlayerIndex) return;
+    
+    let coords = getScaledCoords(e.touches[0]);
+    dragStart.x = coords.x;
+    dragStart.y = coords.y;
+    dragCurrent.x = coords.x;
+    dragCurrent.y = coords.y;
+    
+    isDragging = true;
+    gameState = 'AIMING';
+}, {passive: false});
+
+window.addEventListener('touchmove', (e) => {
+    if (isDragging) {
+        if (e.cancelable) e.preventDefault();
+        let coords = getScaledCoords(e.touches[0]);
+        
+        let dx = dragStart.x - coords.x;
+        let dy = dragStart.y - coords.y;
+        
+        if (Math.hypot(dx, dy) > 200) {
+            let angle = Math.atan2(dy, dx);
+            dragCurrent.x = dragStart.x - Math.cos(angle) * 200;
+            dragCurrent.y = dragStart.y - Math.sin(angle) * 200;
         } else {
-            gameState = 'PLAYING';
+            dragCurrent.x = coords.x;
+            dragCurrent.y = coords.y;
         }
     }
-}
+}, {passive: false});
 
-canvas.addEventListener('mousedown', handleStart, {passive: false});
-window.addEventListener('mousemove', handleMove, {passive: false});
-window.addEventListener('mouseup', handleEnd, {passive: false});
-canvas.addEventListener('touchstart', handleStart, {passive: false});
-window.addEventListener('touchmove', handleMove, {passive: false});
-window.addEventListener('touchend', handleEnd, {passive: false});
+window.addEventListener('touchend', (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+    
+    if (gameState !== 'PLAYING') return;
+    if (isMultiplayer && currentPlayer !== localPlayerIndex) return;
+    
+    let dx = dragStart.x - dragCurrent.x;
+    let dy = dragStart.y - dragCurrent.y;
+    
+    let powerScale = 0.15;
+    let powerX = dx * powerScale;
+    let powerY = dy * powerScale;
+    
+    let powerDist = Math.hypot(powerX, powerY);
+    if (powerDist > MAX_POWER) {
+        powerX = (powerX / powerDist) * MAX_POWER;
+        powerY = (powerY / powerDist) * MAX_POWER;
+    }
+    
+    if (powerDist > 0.5) {
+        playSoundHit();
+        let p = players[currentPlayer];
+        p.lastPosition.x = p.ball.x;
+        p.lastPosition.y = p.ball.y;
+        p.ball.vx = powerX;
+        p.ball.vy = powerY;
+        p.strokes++;
+        
+        if (isMultiplayer) {
+            conn.send({
+                type: 'SHOT',
+                player: currentPlayer,
+                vx: p.ball.vx,
+                vy: p.ball.vy
+            });
+        }
+        
+        updateUI();
+        gameState = 'ROLLING';
+    } else {
+        gameState = 'PLAYING';
+    }
+});
 
 function nextTurn() {
     let allHoled = players.every(p => p.holed);
@@ -544,6 +779,17 @@ function updatePhysics() {
     if (speed < 0.1) {
         ball.vx = 0;
         ball.vy = 0;
+        
+        if (isMultiplayer && currentPlayer === localPlayerIndex) {
+            conn.send({
+                type: 'SYNC',
+                player: currentPlayer,
+                x: ball.x,
+                y: ball.y,
+                strokes: p.strokes,
+                holed: p.holed
+            });
+        }
         nextTurn();
         return;
     }
@@ -558,6 +804,17 @@ function updatePhysics() {
             ball.vy = 0;
             p.holed = true;
             playSoundHole();
+            
+            if (isMultiplayer && currentPlayer === localPlayerIndex) {
+                conn.send({
+                    type: 'SYNC',
+                    player: currentPlayer,
+                    x: ball.x,
+                    y: ball.y,
+                    strokes: p.strokes,
+                    holed: p.holed
+                });
+            }
             nextTurn();
             return;
         }
@@ -715,16 +972,31 @@ function showLevelComplete() {
         nextHoleBtn.textContent = "Next Hole";
     }
     
-    messageOverlay.classList.remove('hidden');
+    document.getElementById('message-overlay').classList.remove('hidden');
 }
 
-nextHoleBtn.addEventListener('click', () => {
-    messageOverlay.classList.add('hidden');
+document.getElementById('next-hole-btn').addEventListener('click', () => {
+    document.getElementById('message-overlay').classList.add('hidden');
     if (gameState === 'GAMEOVER') {
         document.getElementById('title-screen').classList.remove('hidden');
+        return;
+    }
+    
+    if (isMultiplayer) {
+        if (isHost) {
+            currentHole++;
+            generateLevel();
+            gameState = 'PLAYING';
+            currentPlayer = 0;
+            // MAP_DATA is sent automatically by generateLevel
+        } else {
+            // Guest just waits for MAP_DATA to override and setup
+        }
     } else {
         currentHole++;
-        startHole();
+        generateLevel();
+        gameState = 'PLAYING';
+        currentPlayer = 0;
     }
 });
 
