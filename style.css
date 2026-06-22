@@ -1,0 +1,186 @@
+:root {
+    --bg-color: #1a1a1a;
+    --canvas-bg: #2d5a27; /* Dark green for grass */
+    --text-color: #ffffff;
+    --ui-bg: rgba(0, 0, 0, 0.7);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: 'Press Start 2P', cursive;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100dvh;
+    overflow: hidden;
+}
+
+#game-container {
+    position: relative;
+    box-shadow: 0 0 20px rgba(0,0,0,0.8);
+    border: 4px solid #fff;
+}
+
+canvas {
+    display: block;
+    background-color: var(--canvas-bg);
+    image-rendering: pixelated; /* Helps maintain sharp edges */
+    max-width: 100vw;
+    max-height: 100vh;
+    touch-action: none; /* Prevents default mobile browser swipe actions over the canvas */
+}
+
+#ui-layer {
+    position: absolute;
+    top: env(safe-area-inset-top, 5px);
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    padding: 15px;
+    font-size: 12px;
+    background: var(--ui-bg);
+    pointer-events: none;
+    text-shadow: 2px 2px 0px #000;
+}
+
+@media (max-width: 600px) {
+    #ui-layer {
+        padding: 10px 5px;
+        font-size: 8px;
+    }
+}
+
+#message-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+}
+
+#message-overlay.hidden {
+    display: none;
+}
+
+#message-title {
+    font-size: 24px;
+    margin-bottom: 20px;
+    color: #f1c40f;
+    text-shadow: 3px 3px 0px #c0392b;
+}
+
+#message-subtitle {
+    font-size: 14px;
+    margin-bottom: 30px;
+    line-height: 1.5;
+}
+
+button {
+    font-family: 'Press Start 2P', cursive;
+    background: #e74c3c;
+    color: white;
+    border: 4px solid #fff;
+    padding: 15px 20px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+button:hover {
+    background: #c0392b;
+    transform: scale(1.05);
+}
+
+button:active {
+    transform: scale(0.95);
+}
+
+#scorecard {
+    margin: 20px 0 30px 0;
+    width: 95%;
+    max-width: 400px;
+    max-height: 350px;
+    overflow-y: auto;
+}
+
+.unified-scorecard {
+    width: 100%;
+    border-collapse: collapse;
+    background: #000;
+    border: 4px solid #fff;
+    font-size: 10px;
+}
+.unified-scorecard th, .unified-scorecard td {
+    border: 2px solid #333;
+    padding: 6px 1px;
+    text-align: center;
+}
+.unified-scorecard th {
+    color: #f1c40f;
+    font-size: 8px;
+}
+.unified-scorecard td:first-child {
+    text-align: left;
+    padding-left: 5px;
+}
+
+#title-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--canvas-bg);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    z-index: 10;
+}
+
+#title-screen.hidden {
+    display: none;
+}
+
+#title-text {
+    font-size: 40px;
+    margin-bottom: 40px;
+    color: #f1c40f;
+    text-shadow: 4px 4px 0px #c0392b;
+    line-height: 1.5;
+}
+
+#title-screen p {
+    margin-bottom: 20px;
+}
+
+.player-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.player-btn {
+    width: 200px;
+}
+
+@media (min-width: 800px) and (min-height: 800px) {
+    #game-container {
+        margin-top: 5vh;
+    }
+}
