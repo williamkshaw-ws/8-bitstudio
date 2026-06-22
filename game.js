@@ -74,6 +74,15 @@ let connections = [];
 let isHost = false;
 let isMultiplayer = false;
 let localPlayerIndex = 0;
+let readyPlayers = 0;
+
+function checkAllPlayersReady() {
+    if (readyPlayers >= numPlayers) {
+        readyPlayers = 0;
+        currentHole++;
+        startHole();
+    }
+}
 
 function broadcast(data, excludeConnection = null) {
     for (let c of connections) {
@@ -155,6 +164,41 @@ let walls = [];
 let greenZones = [];
 let borders = []; // Visual edges
 let globalGrid = []; // To check tile under ball
+
+function buildCourseGeometry(grid) {
+    globalGrid = grid;
+    walls = [];
+    greenZones = [];
+    borders = [];
+    
+    let rows = grid.length;
+    let cols = grid[0].length;
+    
+    for(let r=0; r<rows; r++) {
+        for(let c=0; c<cols; c++) {
+            let tile = grid[r][c];
+            let x = c * TILE_SIZE;
+            let y = r * TILE_SIZE;
+            
+            if (tile === 'wall') {
+                walls.push({ x, y, w: TILE_SIZE, h: TILE_SIZE });
+            } else if (tile === 'green') {
+                greenZones.push({
+                    x, y, w: TILE_SIZE, h: TILE_SIZE,
+                    pattern: (r+c)%2 === 0 ? COLOR_GREEN_DARK : COLOR_GREEN_LIGHT
+                });
+            }
+            
+            // Visual bumper borders
+            if (tile !== 'wall') {
+                if (r===0 || grid[r-1][c] === 'wall') borders.push({x1: x, y1: y, x2: x+TILE_SIZE, y2: y});
+                if (r===rows-1 || grid[r+1][c] === 'wall') borders.push({x1: x, y1: y+TILE_SIZE, x2: x+TILE_SIZE, y2: y+TILE_SIZE});
+                if (c===0 || grid[r][c-1] === 'wall') borders.push({x1: x, y1: y, x2: x, y2: y+TILE_SIZE});
+                if (c===cols-1 || grid[r][c+1] === 'wall') borders.push({x1: x+TILE_SIZE, y1: y, x2: x+TILE_SIZE, y2: y+TILE_SIZE});
+            }
+        }
+    }
+}
 
 // Input State
 let isDragging = false;
@@ -280,26 +324,27 @@ function handleNetworkData(data, sourceConn) {
         if (!isHost) {
             document.getElementById('join-lobby-status').innerText = `Connected! Players in lobby: ${data.count}/4\nWaiting for host to start...`;
         }
+    } else if (data.type === 'READY_NEXT_HOLE') {
+        if (isHost) {
+            readyPlayers++;
+            checkAllPlayersReady();
+        }
     } else if (data.type === 'MAP_DATA') {
         numPlayers = data.numPlayers;
         if (!isHost) {
             localPlayerIndex = data.yourPlayerIndex;
             document.getElementById('title-screen').classList.add('hidden');
         }
-        globalGrid = data.grid;
-        walls = [];
-        greenZones = [];
-        let cols = globalGrid[0].length;
-        let rows = globalGrid.length;
-        for(let r=0; r<rows; r++) {
-            for(let c=0; c<cols; c++) {
-                if (globalGrid[r][c] === 'wall') {
-                    walls.push({x: c*TILE_SIZE, y: r*TILE_SIZE, w: TILE_SIZE, h: TILE_SIZE});
-                } else {
-                    greenZones.push({x: c*TILE_SIZE, y: r*TILE_SIZE, w: TILE_SIZE, h: TILE_SIZE});
-                }
-            }
-        }
+        
+        let cols = data.grid[0].length;
+        let rows = data.grid.length;
+        WIDTH = cols * TILE_SIZE;
+        HEIGHT = rows * TILE_SIZE;
+        canvas.width = WIDTH;
+        canvas.height = HEIGHT;
+        
+        buildCourseGeometry(data.grid);
+        
         hole.x = data.hx;
         hole.y = data.hy;
         currentPar = data.currentPar;
@@ -321,12 +366,17 @@ function handleNetworkData(data, sourceConn) {
             }
         } else {
             for(let p of players) {
+                p.strokes = 0;
                 p.holed = false;
                 p.ball.x = data.startC*TILE_SIZE + TILE_SIZE/2;
                 p.ball.y = data.startR*TILE_SIZE + TILE_SIZE/2;
                 p.ball.vx = 0; p.ball.vy = 0;
             }
         }
+        
+        document.getElementById('message-overlay').classList.add('hidden');
+        document.getElementById('next-hole-btn').innerText = "Next Hole";
+        document.getElementById('next-hole-btn').disabled = false;
         
         gameState = 'PLAYING';
         currentPlayer = 0;
@@ -597,35 +647,7 @@ function generateLevel() {
     else currentPar = 5;
     holePars[currentHole - 1] = currentPar;
     
-    globalGrid = grid;
-    walls = [];
-    greenZones = [];
-    borders = [];
-    
-    for(let r=0; r<rows; r++) {
-        for(let c=0; c<cols; c++) {
-            let tile = grid[r][c];
-            let x = c * TILE_SIZE;
-            let y = r * TILE_SIZE;
-            
-            if (tile === 'wall') {
-                walls.push({ x, y, w: TILE_SIZE, h: TILE_SIZE });
-            } else if (tile === 'green') {
-                greenZones.push({
-                    x, y, w: TILE_SIZE, h: TILE_SIZE,
-                    pattern: (r+c)%2 === 0 ? COLOR_GREEN_DARK : COLOR_GREEN_LIGHT
-                });
-            }
-            
-            // Visual bumper borders
-            if (tile !== 'wall') {
-                if (r===0 || grid[r-1][c] === 'wall') borders.push({x1: x, y1: y, x2: x+TILE_SIZE, y2: y});
-                if (r===rows-1 || grid[r+1][c] === 'wall') borders.push({x1: x, y1: y+TILE_SIZE, x2: x+TILE_SIZE, y2: y+TILE_SIZE});
-                if (c===0 || grid[r][c-1] === 'wall') borders.push({x1: x, y1: y, x2: x, y2: y+TILE_SIZE});
-                if (c===cols-1 || grid[r][c+1] === 'wall') borders.push({x1: x+TILE_SIZE, y1: y, x2: x+TILE_SIZE, y2: y+TILE_SIZE});
-            }
-        }
-    }
+    buildCourseGeometry(grid);
     
     if (isMultiplayer && isHost) {
         let idx = 1;
@@ -1056,27 +1078,26 @@ function showLevelComplete() {
 }
 
 document.getElementById('next-hole-btn').addEventListener('click', () => {
-    document.getElementById('message-overlay').classList.add('hidden');
     if (gameState === 'GAMEOVER') {
+        document.getElementById('message-overlay').classList.add('hidden');
         document.getElementById('title-screen').classList.remove('hidden');
         return;
     }
     
     if (isMultiplayer) {
+        document.getElementById('next-hole-btn').innerText = "Waiting for others...";
+        document.getElementById('next-hole-btn').disabled = true;
+        
         if (isHost) {
-            currentHole++;
-            generateLevel();
-            gameState = 'PLAYING';
-            currentPlayer = 0;
-            // MAP_DATA is sent automatically by generateLevel
+            readyPlayers++;
+            checkAllPlayersReady();
         } else {
-            // Guest just waits for MAP_DATA to override and setup
+            sendNetworkData({ type: 'READY_NEXT_HOLE' });
         }
     } else {
+        document.getElementById('message-overlay').classList.add('hidden');
         currentHole++;
-        generateLevel();
-        gameState = 'PLAYING';
-        currentPlayer = 0;
+        startHole();
     }
 });
 
