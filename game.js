@@ -260,6 +260,13 @@ document.getElementById('btn-join').addEventListener('click', () => {
             alert("Disconnected from Host.");
         });
     });
+    
+    peer.on('error', (err) => {
+        if (err.type === 'peer-unavailable') {
+            alert("Room not found! Check the code and try again.");
+            document.getElementById('btn-join').innerText = "Connect";
+        }
+    });
 });
 
 function handleNetworkData(data, sourceConn) {
@@ -302,6 +309,9 @@ function handleNetworkData(data, sourceConn) {
             for(let i=0; i<numPlayers; i++) {
                 players.push({
                     id: i+1,
+                    color: PLAYER_COLORS[i],
+                    totalScore: 0,
+                    holeScores: Array(18).fill('-'),
                     strokes: 0,
                     holed: false,
                     ball: {x: data.startC*TILE_SIZE + TILE_SIZE/2, y: data.startR*TILE_SIZE + TILE_SIZE/2, vx: 0, vy: 0, radius: 5},
@@ -334,6 +344,7 @@ function handleNetworkData(data, sourceConn) {
         playSoundHit();
         p.strokes++;
         updateUI();
+        gameState = 'ROLLING';
     } else if (data.type === 'SYNC') {
         let p = players[data.player];
         p.ball.x = data.x;
